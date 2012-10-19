@@ -10,12 +10,14 @@ n.tps = 240
 corthresh=0.25
 corMat <- read.table("/Users/pluta/Desktop/rsfmri_testdata/controls/n1/wave_cor_mat_level_1.txt", skip=3, header=FALSE)
 corMat <- as.matrix(corMat)
-adjMat <- const.adj.mat(corMat, var.ind.mat=0, n.ind=0, thresh = 0.05, num.levels=1, sup=corthresh, proc.length=n.tps, test.method="gaussian", use.tanh=FALSE)
+adjMat <- const.adj.mat(corMat, var.ind.mat=0, n.ind=0, thresh = 0.34, num.levels=1, sup=corthresh, proc.length=n.tps, test.method="gaussian", use.tanh=FALSE)
 
 g1 <- graph.adjacency(adjMat, mode=c("undirected") )
 btwn <- betweenness(g1)
 
 btwnRank <- rank(btwn)
+
+# red -> most betweenness, blue least
 nodeGrad <- colorRampPalette(c("red", "blue")) (10)
 n.nodes = dim(corMat)[1]
 nodeCol <- rep(" ", n.nodes)
@@ -49,4 +51,4 @@ if( btwnRank[i] >= 11 & btwnRank[i] <= 20)
 }
 coords=read.table("/Users/pluta/Desktop/aal_coords.txt")
 coords <- as.matrix(coords)
-gplot3d(adjMat, gmode="graph", diag=FALSE, vertex.col=nodeCol, new=FALSE, coord=coords)
+gplot3d(adjMat, gmode="graph", diag=FALSE, vertex.col=nodeCol, new=FALSE, edge.lwd=0.05, coord=coords)

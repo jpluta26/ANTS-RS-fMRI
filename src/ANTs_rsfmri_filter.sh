@@ -14,6 +14,8 @@
 
 
 # TODO: user options to save bounds on correlatoin matrices- ask taki about this
+# corr heat maps dont update w/ label names <- make sure this populates
+
 
 library(methods) # this one is critical and should always be included in Rscripts
 
@@ -54,7 +56,7 @@ spec = c(
 'wavelet' , 'w', 0, "logical", "do wavelet analysis",
 'bandpass'   , 'b', 1, "character"," frequences in form FLOxFHI e.g.  0.02x0.1 for bandpass filtering",
 'tr'   , 't', 1, "character"," TR for the rsfMRI acquisition",
-'labelnames' , 'l', 1, "character"," node label names passed in by the user, .csv format (optional)",
+'labelnames' , 'l', 1, "character"," node label names passed in by the user, .txt format (optional)",
 'output' , 'o', 1, "character"," the output prefix ")
 # ...................................................... #
 
@@ -146,7 +148,7 @@ if ( ! is.null(opt$rsfmri) )
 	  if ( ! is.null(opt$labelnames) ) 
    	  {
     		print(paste("rename data according to user-passed label names",opt$labelnames))
-    		newnames<-names( read.csv(opt$labelnames) )
+    		newnames<-names( read.table(opt$labelnames), header=FALSE )
     		names(a)<-newnames 
     	  }
   }

@@ -11,8 +11,7 @@
 
 # TODO: remove dependency on c3d - can probably replace this with PrintHeader
 # remove bet2 dependency
-# automatic threshold detection for QC?
-# implement brian's code for center functional images
+
 
 
 # necessary paths - user defined
@@ -173,7 +172,7 @@ MOVING=${out}tempT2.nii.gz
 
 
 # perform coregistration 
-exe="antsRegistration -d 3 -o [ ${out}toT1 , ${out}toT1.nii.gz ] -m Mattes[ $FIXED, $MOVING, 1, 32, Regular, 0.5] -t Translation[0.5] -f 6x4x2 -s 3x2x1 -c [100x100x100, 1e-08, 10]"
+exe="antsRegistration -d 3 -r [ $FIXED , $MOVING, 1] -o [ ${out}toT1 , ${out}toT1.nii.gz ] -m Mattes[ $FIXED, $MOVING, 1, 32, Regular, 0.5] -t Translation[0.5] -f 6x4x2 -s 3x2x1 -c [100x100x100, 1e-08, 10]"
 echo $exe
 $exe
 
@@ -204,7 +203,7 @@ do
 	count=$((count+1))
 	
 	# apply transformation
-	cmd="antsApplyTransforms -d 3 -i $IMG -r ${out}avg.nii.gz -o $OUT -t [${out}toT10Translation.mat , 1] "
+	cmd="antsApplyTransforms -d 3 -i $IMG -r ${out}avg.nii.gz -o $OUT -t [${out}toT11Translation.mat , 1] "
 
 	# for ROI file
 	if [[ $count -eq 5 ]] ;
