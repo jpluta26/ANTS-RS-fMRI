@@ -9,7 +9,6 @@
 # of all the functional images (3D). images will be appended with "_T2".
 
 
-# TODO: remove dependency on c3d - can probably replace this with PrintHeader
 # remove bet2 dependency
 
 
@@ -152,7 +151,7 @@ fi
 
 # ................ coregistration ..........................
 # get image dimensions
-str=`c3d ${out}avg.nii.gz -info-full | grep 'Voxel Spacing' | awk '{print $4, $5, $6}' | tr '[' ' ' | tr ']' ' '`
+str=`PrintHeader ${out}avg.nii.gz -info-full | grep 'Spacing' | awk '{print $4, $5, $6}' | tr '[' ' ' | tr ']' ' '`
 XDIM=`echo $str | awk '{print $1}' | tr ',' ' '`
 YDIM=`echo $str | awk '{print $2}' | tr ',' ' '`
 ZDIM=`echo $str | awk '{print $3}'`
@@ -233,13 +232,13 @@ THRESHLO=100
 NAME=`basename $AVG .nii.gz`
 AVGIMGBIN=${NAME}bin.nii.gz
 
-c3d $AVG -thresh $THRESHLO inf 1 0 -o $AVGIMGBIN
+
+ThreshOldImage 3 $AVG $AVGIMGBIN $THRESHLO inf 1 0
 
 # get dice overlap, assign to OVL
-OVL=$(c3d $AVGIMGBIN $BMASK -overlap 1 | awk '{print $6}' )
+ImageMath 3 out DiceAndMinDistSum $AVGIMGBIN $BMASK
+OVL=$(`more out.csv | grep Label_01 | tr ',' ' ' | awk '{print $2}'`)
 
-# remove the comma
-OVL=`echo "${OVL%?}"`
 
 OVLTHRESH=0.8  # dice overlap threshold. if overlap between the binary average image and the brainmask 
 		# is less than the threshold, theres been an error in the registration process.

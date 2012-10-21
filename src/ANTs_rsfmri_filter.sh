@@ -148,8 +148,8 @@ if ( ! is.null(opt$rsfmri) )
 	  if ( ! is.null(opt$labelnames) ) 
    	  {
     		print(paste("rename data according to user-passed label names",opt$labelnames))
-    		newnames<-names( read.table(opt$labelnames), header=FALSE )
-    		names(a)<-newnames 
+    		newnames<- read.table(opt$labelnames) 
+    		colnames(a)<-newnames[,2] 
     	  }
   }
 
@@ -271,6 +271,17 @@ filterTimeSeries <- function(TimeSeries, freqLo, freqHi, level)
 		return(fTimeSeries)
 	}
 }	
+# .................................................................... #
+
+
+# ........................plotHeapMap....................................... #
+# just a wrapper functions to make the call easier
+plotHeatMap <- function( corrmat , pdfname )
+{
+	pdf( pdfname )
+	heatmap( corrmat, symm=T, Rowv=NA, labRow=names(a), labCol=names(a) )
+	dev.off
+}
 # .................................................................... #
 # ----------------------------------------------------------------------------- #
 
@@ -439,12 +450,7 @@ tsdf<-as.matrix(fTimeSeries)
 names(tsdf)<-names(a)
 #..................................................................................#
 
-plotHeatMap <- function( corrmat , pdfname )
-{
-	pdf( pdfname )
-	heatmap( corrmat, symm=T, Rowv=NA, labRow=names(a), labCol=names(a) )
-	dev.off
-}
+
 
 # ......................procede with analysis .............................#
 # once filtering is done, create correlation matrices
