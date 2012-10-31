@@ -66,20 +66,56 @@ while getopts "i:o:r:c:g:w:b:t:h" opt ; do
 done
 # ............................................. #
 
+# needs to be tested
+function checkDim
+{
+# T1 dimensions should be global variables so i think this is ok
+    IMG=$1
+
+    str=`PrintHeader $IMG | grep 'Voxel Spacing' | awk '{print $4, $5, $6}' | tr '[' ' ' | tr ']' ' '`
+    IMGXDIM=`echo $str | awk '{print $1}' | tr ',' ' '`
+    IMGYDIM=`echo $str | awk '{print $2}' | tr ',' ' '`
+    IMGZDIM=`echo $str | awk '{print $3}'`
+
+    if [ $IMGXDIM != $T1XDIM ] ; then
+        echo "$T1 and $IMG must have the same dimensions - see usage. Exiting"
+        exit 1
+    elif [ $IMGYDIM != $T1YDIM ] ; then
+        echo "$T1 and $IMG must have the same dimensions - see usage. Exiting"
+        exit 1
+    elif [ $IMGZDIM != $T1ZDIM ] ; then
+        echo "$T1 and $IMG must have the same dimensions - see usage. Exiting"
+        exit 1
+    fi
+}
+
+
 # ........  check that the necessary arguments exist ...... #
+# make sure images all have the same dimensions
 if [[ ! -s $img ]] ; then
-  echo -e the input image $img does not exist, exiting ... pass -h option on command line
+  echo "the input time-series image $img does not exist, exiting ... pass -h option on command line"
   exit 1
 fi
 
+if [[ ! -s $T1 ]] ; then
+    echo "T1 image $T1 does not exist, exiting ... pass -h option on command line"
+    exit 1
+else
+    str=`PrintHeader $T1 | grep 'Voxel Spacing' | awk '{print $4, $5, $6}' | tr '[' ' ' | tr ']' ' '`
+    T1XDIM=`echo $str | awk '{print $1}' | tr ',' ' '`
+    T1YDIM=`echo $str | awk '{print $2}' | tr ',' ' '`
+    T1ZDIM=`echo $str | awk '{print $3}'`
+fi
 
 if [[ ! -s $roi ]] ; then
-  echo the input image $roi does not exist
+  echo "the input image $roi does not exist"
+else
+  checkDim $roi
 fi
 
 
 if [[ ${#out} -lt 1 ]] ; then
-  echo no output defined  ... pass -h option on command line
+  echo "no output defined  ... pass -h option on command line"
   echo -e  $usage
   exit 1
 fi
@@ -88,29 +124,34 @@ fi
 if [[ ! -s $CSFPRIOR ]] ; then
 	echo CSF image does not exist, exiting ... pass -h option on command line
 	exit 1
+else
+    checkDim $CSFPRIOR
 fi
 
 
 if [[ ! -s $GMPRIOR ]] ; then
 	echo GM image does not exist, exiting ... pass -h option on command line
 	exit 1
+else
+    checkDim $GMPRIOR
 fi
 
 
 if [[ ! -s $WMPRIOR ]] ; then
 	echo WM image does not exist, exiting ... pass -h option on command line
 	exit 1
+else
+    checkDim $WMPRIOR
 fi
 
 if [[ ! -s $BMASK ]] ; then
 	echo brainmask does not exist, exiting ... pass -h option on command line
 	exit 1
+else
+    checkDim $BMASK
 fi
 
-if [[ ! -s $T1 ]] ; then
-	echo T1 image does not exist, exiting ... pass -h option on command line
-	exit 1
-fi
+
 
 
 outdir=$(dirname $out) 
@@ -151,7 +192,7 @@ fi
 
 # ................ coregistration ..........................
 # get image dimensions
-str=`PrintHeader ${out}avg.nii.gz -info-full | grep 'Spacing' | awk '{print $4, $5, $6}' | tr '[' ' ' | tr ']' ' '`
+str=`PrintHeader ${out}avg.nii.gz | grep 'Voxel Spacing' | awk '{print $4, $5, $6}' | tr '[' ' ' | tr ']' ' '`
 XDIM=`echo $str | awk '{print $1}' | tr ',' ' '`
 YDIM=`echo $str | awk '{print $2}' | tr ',' ' '`
 ZDIM=`echo $str | awk '{print $3}'`
@@ -179,6 +220,8 @@ $exe
 count=0
 for IMG in $BMASK $CSFPRIOR $GMPRIOR $WMPRIOR $roi
 do
+    count=$((count+1))
+
 	# setup the image names
 	# if the images are in another directory, we need to parse the text
 	# just keep the image name and prepend ${out}
@@ -197,9 +240,13 @@ do
 	else	
 		OUT=${out}${NAME}_T2.nii.gz
 	fi
-	
 
-	count=$((count+1))
+    # record new brainmask name for qc
+    if  [[ count == 1 ]]
+    then
+        OUTBMASK = OUT
+    fi
+
 	
 	# apply transformation
 	cmd="antsApplyTransforms -d 3 -i $IMG -r ${out}avg.nii.gz -o $OUT -t [${out}toT11Translation.mat , 1] "
@@ -221,7 +268,7 @@ done
 # binarize the average image and make sure there is overlap between the binary
 # image and the brainmask. this will not give particularly specific information
 # on the quality of the registration, but it can detect a failure.
-BMASK=${out}_brainmask_T2.nii.gz
+
 
 # this may change depending on the intensity range of your images
 # 100 is good for BOLD
@@ -233,11 +280,11 @@ NAME=`basename $AVG .nii.gz`
 AVGIMGBIN=${NAME}bin.nii.gz
 
 
-ThreshOldImage 3 $AVG $AVGIMGBIN $THRESHLO inf 1 0
+ThresholdImage 3 $AVG $AVGIMGBIN $THRESHLO inf 1 0
 
 # get dice overlap, assign to OVL
-ImageMath 3 out DiceAndMinDistSum $AVGIMGBIN $BMASK
-OVL=$(`more out.csv | grep Label_01 | tr ',' ' ' | awk '{print $2}'`)
+ImageMath 3 out DiceAndMinDistSum $AVGIMGBIN $OUTBMASK
+OVL=$(more out.csv | grep Label_01 | tr ',' ' ' | awk '{print $2}')
 
 
 OVLTHRESH=0.8  # dice overlap threshold. if overlap between the binary average image and the brainmask 
@@ -261,6 +308,7 @@ fi
 rm ${out}t1_lores.nii.gz
 rm ${out}tempT1.nii.gz
 rm ${out}tempT2.nii.gz
+rm out.csv
 rm $AVGIMGBIN
 # .................................................... #
 

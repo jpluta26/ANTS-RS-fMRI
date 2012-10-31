@@ -12,6 +12,11 @@
 
 
 
+# fix brainmask naming
+# clean up help text and usage
+# add dimension check
+# make directory for diagnostic images?
+
 # necessary paths
 export ANTSPATH=/usr/local/ANTS/ANTs-1.9.x-Linux/bin/:$ANTSPATH
 export LD_LIBRARY_PATH=/usr/local/ANTS/ANTs-1.9.x-Linux/bin:$LD_LIBRARY_PATH
@@ -77,37 +82,78 @@ while getopts "i:o:r:c:g:w:b:t:a:h" opt ; do
 done
 # ..................................................... #
 
+# needs to be tested
+function checkDim
+{
+# T1 dimensions should be global variables so i think this is ok
+    IMG=$1
+
+    str=`PrintHeader $IMG | grep 'Voxel Spacing' | awk '{print $4, $5, $6}' | tr '[' ' ' | tr ']' ' '`
+    IMGXDIM=`echo $str | awk '{print $1}' | tr ',' ' '`
+    IMGYDIM=`echo $str | awk '{print $2}' | tr ',' ' '`
+    IMGZDIM=`echo $str | awk '{print $3}'`
+
+    if [ $IMGXDIM != $T2XDIM ] ; then
+        echo "$T1 and $IMG must have the same dimensions - see usage. Exiting"
+    exit 1
+    elif [ $IMGYDIM != $T2YDIM ] ; then
+        echo "$T1 and $IMG must have the same dimensions - see usage. Exiting"
+    exit 1
+    elif [ $IMGZDIM != $T2ZDIM ] ; then
+        echo "$T1 and $IMG must have the same dimensions - see usage. Exiting"
+    exit 1
+    fi
+}
+
+
 # ................ check for required arguments ............. #
 if [[ ! -s $img ]] ; then
   echo -e the input image $img does not exist, exiting ... pass -h option on command line
   exit 1
+# not totally sure this will work with a 4D image...
+else
+    str=`PrintHeader $img | grep 'Voxel Spacing' | awk '{print $4, $5, $6}' | tr '[' ' ' | tr ']' ' '`
+    T2XDIM=`echo $str | awk '{print $1}' | tr ',' ' '`
+    T2YDIM=`echo $str | awk '{print $2}' | tr ',' ' '`
+    T2ZDIM=`echo $str | awk '{print $3}'`
 fi
 
 if [[ ! -s $CSFPRIOR ]] ; then
 	echo -e the CSF prior $CSFPRIOR does not exist, exiting ... pass -h option on command line
 	exit 1
+else
+    checkDim $CSFPRIOR
 fi
 
 if [[ ! -s $GMPRIOR ]] ; then
 	echo -e the GM prior $GMPRIOR does not exist, exiting ... pass -h option on command line
 	exit 1
+else
+    checkDim $GMPRIOR
 fi
 
 if [[ ! -s $WMPRIOR ]] ; then
 	echo -e the WM prior $WMPRIOR does not exist, exiting ... pass -h option on command line
 	exit 1
+else
+    checkDim $WMPRIOR
 fi
 
 if [[ ! -s $BMASK ]] ; then
 	echo -e the brainmask $BMASK does not exist, exiting ... pass -h option on command line
 	exit 1
+else
+    checkDim $BMASK
 fi
 
 # for now, ROI is required
 if [[ ! -s $roi ]] ; then
   echo the input image $roi does not exist, exiting ... pass -h option on command line
   exit 1
+else
+    checkDim $roi
 fi
+
 
 
 if [[ ${#out} -lt 1 ]] ; then

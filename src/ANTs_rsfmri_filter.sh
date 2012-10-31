@@ -308,12 +308,20 @@ tps <- seq(1:n.tps)   # x-axis for plotting
 
 
 # 6 parameters of rigid registration
-xtrans <- motion[,3]
-ytrans <- motion[,4]
-ztrans <- motion[,5]
-pitch  <- motion[,6]
-roll   <- motion[,7]
-yaw    <- motion[,8]
+# spm/AFNI produce files with dimensions n.tps x 6
+# ANTS produces a file with dimensions n.tps x 8, last 6 are rigid body motion parameters
+# need to account for both options
+if( dim(motion)[2] == 6)
+{    index <- seq(1:6)   } else
+if( dim(motion)[2] == 8)
+{    index <- seq(3:8)   }
+
+xtrans <- motion[,index[1]]
+ytrans <- motion[,index[2]]
+ztrans <- motion[,index[3]]
+pitch  <- motion[,index[4]]
+roll   <- motion[,index[5]]
+yaw    <- motion[,index[6]]
 
 
 # setup the range of the yaxis
