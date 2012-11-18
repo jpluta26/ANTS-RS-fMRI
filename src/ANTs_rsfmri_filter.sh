@@ -13,7 +13,7 @@
 # ----------------------------
 
 
-# TODO: user options to save bounds on correlatoin matrices- ask taki about this
+# TODO: user options to save bounds on correlation matrices- ask taki about this
 # corr heat maps dont update w/ label names <- make sure this populates
 
 
@@ -232,7 +232,7 @@ filterTimeSeries <- function(TimeSeries, freqLo, freqHi, level)
 {
 	if( level == 0)
 	{
-		fn<-paste(opt$output,"filtering.pdf",sep='')
+		fn<-paste(opt$output,"_filtering.pdf",sep='')
 	} else
 	{
 		fn <- paste(opt$output, "_filtering_level_", level, ".pdf", sep='')
@@ -242,12 +242,13 @@ filterTimeSeries <- function(TimeSeries, freqLo, freqHi, level)
 	print(paste("Frequency filter",freqLo,"x",freqHi,"from",tr,"second TR data"))	
 	voxLo<-round(1/freqLo)
 	voxHi<-round(1/freqHi)
-	
+	write.table(TimeSeries, file="TimeSeries.txt", row.names=FALSE, col.names=FALSE)
 	# filter time series by specified range
 	# only proceed if the data is valid
 	fTimeSeries <- try(residuals( cffilter( TimeSeries , pl=voxHi, pu=voxLo , drift=TRUE , type="t")) )  
 	if(class(fTimeSeries) == "try-error")
 	{
+		print( paste( "Error in filterTimeSeries"))
 		return(0)
 	} else
 	{	
@@ -260,16 +261,15 @@ filterTimeSeries <- function(TimeSeries, freqLo, freqHi, level)
 		spec.pgram( TimeSeries, taper=0, fast=FALSE, detrend=F, demean=F, log="n")
 		
 		plot(fTimeSeries[,vv],type='l',main=paste('Filtered Time series: ',freqLo,"< f <",freqHi), ylab="Signal")
-
-		fTimeSeries <- fTimeSeries[,vv]
 		spec.pgram(fTimeSeries, taper=0, fast=FALSE, detrend=F,demean=F, log="n")
 
 
 
 		dev.off() # write pdf
-	
+		
 		return(fTimeSeries)
 	}
+	
 }	
 # .................................................................... #
 
@@ -279,8 +279,14 @@ filterTimeSeries <- function(TimeSeries, freqLo, freqHi, level)
 plotHeatMap <- function( corrmat , pdfname )
 {
 	pdf( pdfname )
-	heatmap( corrmat, symm=T, Rowv=NA, labRow=names(a), labCol=names(a) )
-	dev.off
+	if( is.null(opt$labelnames) )
+	{
+		heatmap( corrmat, symm=T, Rowv=NA )
+	} else
+	{
+		heatmap( corrmat, symm=T, Rowv=NA, labRow=names(a), labCol=names(a) )
+	}
+	dev.off()
 }
 # .................................................................... #
 # ----------------------------------------------------------------------------- #
@@ -311,17 +317,16 @@ tps <- seq(1:n.tps)   # x-axis for plotting
 # spm/AFNI produce files with dimensions n.tps x 6
 # ANTS produces a file with dimensions n.tps x 8, last 6 are rigid body motion parameters
 # need to account for both options
-if( dim(motion)[2] == 6)
-{    index <- seq(1:6)   } else
-if( dim(motion)[2] == 8)
-{    index <- seq(3:8)   }
 
-xtrans <- motion[,index[1]]
-ytrans <- motion[,index[2]]
-ztrans <- motion[,index[3]]
-pitch  <- motion[,index[4]]
-roll   <- motion[,index[5]]
-yaw    <- motion[,index[6]]
+if( dim(motion)[2] == 8)
+{    motion <- motion[,3:8]   }
+
+xtrans <- motion[,1]
+ytrans <- motion[,2]
+ztrans <- motion[,3]
+pitch  <- motion[,4]
+roll   <- motion[,5]
+yaw    <- motion[,6]
 
 
 # setup the range of the yaxis
@@ -381,6 +386,7 @@ nuisance <- nuisance[inds,]
 
 
 
+
 # factor out nuisance variables
 # keep the portion of the signal that is not explained by nuisance vars,
 # which is the residuals
@@ -397,10 +403,10 @@ if ( exists("motion") )
   {
 	  print("factor out motion vars")
 	  mp<-as.matrix(motion)
-	  mp[,3:8]<-mp[,3:8]-mp[c(1,3:nrow(mp),nrow(mp)),3:8]
+	  mp[,1:6]<-mp[,1:6]-mp[c(1,3:nrow(mp),nrow(mp)),1:6]
 	  motionconfounds<-matrix( rep(NA,2*nrow(mp)) ,nrow=nrow(mp),ncol=2)
-	  motionconfounds[,1]<-sqrt( mp[,3]*mp[,3] + mp[,4]*mp[,4] + mp[,5]*mp[,5] )  # rotation magnitude
-	  motionconfounds[,2]<-sqrt( mp[,6]*mp[,6] + mp[,7]*mp[,7] + mp[,8]*mp[,8] )  # translation magnitude
+	  motionconfounds[,1]<-sqrt( mp[,1]*mp[,1] + mp[,2]*mp[,2] + mp[,3]*mp[,3] )  # rotation magnitude
+	  motionconfounds[,2]<-sqrt( mp[,4]*mp[,4] + mp[,5]*mp[,5] + mp[,6]*mp[,6] )  # translation magnitude
 	  amat<-residuals(lm(amat~1+motionconfounds))
   }
 
@@ -410,6 +416,8 @@ if ( exists("motion") )
 # frequency filtering
 print("now do frequency filtering ")
 tr<-as.real(as.character(opt$tr)) 
+
+
 myTimeSeries<-ts( amat ,  frequency<-1/tr )
 
 
@@ -488,8 +496,8 @@ if( is.null(opt$bandpass) )
 	
 	for(i in 1:valid.levels)
 	{
-		name = paste(opt$output, "cor_matrix_lvl", i, ".txt", sep="")
-		heatmapname = paste(opt$output, "cor_matrix_map_level", i, ".pdf", sep="")
+		name = paste(opt$output, "_cor_matrix_lvl", i, ".txt", sep="")
+		heatmapname = paste(opt$output, "_cor_matrix_map_level", i, ".pdf", sep="")
 		waveCorDat <- paste("waveCorMat$d", i, sep="")
 		waveCorDat <- eval(parse(text=waveCorDat))
 		write.table( waveCorDat , name, row.names=FALSE, col.names=FALSE)
@@ -499,6 +507,7 @@ if( is.null(opt$bandpass) )
 {
 	# otherwise the data has alreayd been filtered so we can do a standard correlation
 	im <- ( cor(tsdf) )
+	
 	heatmapname = paste(opt$output, "cor_matrix_map.pdf", sep="")
 	name = paste(opt$output, "cor_matrix.txt", sep="")
 	write.table(im, file="cor_matrix.txt", row.names=FALSE, col.names=FALSE)

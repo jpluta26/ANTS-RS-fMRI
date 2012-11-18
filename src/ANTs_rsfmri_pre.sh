@@ -12,14 +12,15 @@
 
 
 
-# fix brainmask naming
-# clean up help text and usage
-# add dimension check
-# make directory for diagnostic images?
 
-# necessary paths
-export ANTSPATH=/usr/local/ANTS/ANTs-1.9.x-Linux/bin/:$ANTSPATH
-export LD_LIBRARY_PATH=/usr/local/ANTS/ANTs-1.9.x-Linux/bin:$LD_LIBRARY_PATH
+# necessary paths - user defined
+
+# at CFN use:
+#export ANTSPATH=/usr/local/ANTS/ANTs-1.9.x-Linux/bin/:$ANTSPATH
+#export LD_LIBRARY_PATH=/usr/local/ANTS/ANTs-1.9.x-Linux/bin:$LD_LIBRARY_PATH
+
+# at PICSL use:
+export ANTSPATH=/home/avants/bin/ants/:${ANTSPATH}
 
 
 
@@ -82,10 +83,10 @@ while getopts "i:o:r:c:g:w:b:t:a:h" opt ; do
 done
 # ..................................................... #
 
-# needs to be tested
+# ....................checkDim ........................ #
 function checkDim
 {
-# T1 dimensions should be global variables so i think this is ok
+    #  the sole input is the image to check dimensions; check against the dimensions of the average fmri image	
     IMG=$1
 
     str=`PrintHeader $IMG | grep 'Voxel Spacing' | awk '{print $4, $5, $6}' | tr '[' ' ' | tr ']' ' '`
@@ -93,82 +94,114 @@ function checkDim
     IMGYDIM=`echo $str | awk '{print $2}' | tr ',' ' '`
     IMGZDIM=`echo $str | awk '{print $3}'`
 
-    if [ $IMGXDIM != $T2XDIM ] ; then
-        echo "$T1 and $IMG must have the same dimensions - see usage. Exiting"
-    exit 1
-    elif [ $IMGYDIM != $T2YDIM ] ; then
-        echo "$T1 and $IMG must have the same dimensions - see usage. Exiting"
-    exit 1
-    elif [ $IMGZDIM != $T2ZDIM ] ; then
-        echo "$T1 and $IMG must have the same dimensions - see usage. Exiting"
-    exit 1
+    if [ $IMGXDIM != $T2XDIM ] 
+    then
+	echo " "
+        echo "$img and $IMG must have the same dimensions - see usage. Exiting"
+	echo " "
+    	exit 1
+    elif [ $IMGYDIM != $T2YDIM ] 
+    then
+   	echo " "
+	echo "$img and $IMG must have the same dimensions - see usage. Exiting"
+    	echo " "
+	exit 1
+    elif [ $IMGZDIM != $T2ZDIM ] 
+    then
+        echo " "
+	echo "$img and $IMG must have the same dimensions - see usage. Exiting"
+    	echo " "
+	exit 1
     fi
 }
-
+# ..................................................... #
 
 # ................ check for required arguments ............. #
-if [[ ! -s $img ]] ; then
-  echo -e the input image $img does not exist, exiting ... pass -h option on command line
-  exit 1
-# not totally sure this will work with a 4D image...
+if [[ ! -s $img ]] 
+then
+  	echo " "
+	echo "-e the input image $img does not exist, exiting ... pass -h option on command line"
+	echo " "
+	exit 1
 else
     str=`PrintHeader $img | grep 'Voxel Spacing' | awk '{print $4, $5, $6}' | tr '[' ' ' | tr ']' ' '`
     T2XDIM=`echo $str | awk '{print $1}' | tr ',' ' '`
     T2YDIM=`echo $str | awk '{print $2}' | tr ',' ' '`
-    T2ZDIM=`echo $str | awk '{print $3}'`
+    T2ZDIM=`echo $str | awk '{print $3}' | tr ',' ' '`
 fi
 
-if [[ ! -s $CSFPRIOR ]] ; then
-	echo -e the CSF prior $CSFPRIOR does not exist, exiting ... pass -h option on command line
+if [[ ! -s $CSFPRIOR ]]
+then
+	echo " "
+	echo "-e the CSF prior $CSFPRIOR does not exist, exiting ... pass -h option on command line"
+	echo " "
 	exit 1
 else
     checkDim $CSFPRIOR
 fi
 
-if [[ ! -s $GMPRIOR ]] ; then
-	echo -e the GM prior $GMPRIOR does not exist, exiting ... pass -h option on command line
+if [[ ! -s $GMPRIOR ]] 
+then
+	echo " "
+	echo "-e the GM prior $GMPRIOR does not exist, exiting ... pass -h option on command line"
+	echo " "
 	exit 1
 else
     checkDim $GMPRIOR
 fi
 
-if [[ ! -s $WMPRIOR ]] ; then
-	echo -e the WM prior $WMPRIOR does not exist, exiting ... pass -h option on command line
+if [[ ! -s $WMPRIOR ]] 
+then
+	echo " "
+	echo "-e the WM prior $WMPRIOR does not exist, exiting ... pass -h option on command line"
+	echo " "
 	exit 1
 else
     checkDim $WMPRIOR
 fi
 
-if [[ ! -s $BMASK ]] ; then
-	echo -e the brainmask $BMASK does not exist, exiting ... pass -h option on command line
+if [[ ! -s $BMASK ]]
+then
+	echo " "
+	echo "-e the brainmask $BMASK does not exist, exiting ... pass -h option on command line"
+	echo " "
 	exit 1
 else
     checkDim $BMASK
 fi
 
 # for now, ROI is required
-if [[ ! -s $roi ]] ; then
-  echo the input image $roi does not exist, exiting ... pass -h option on command line
-  exit 1
+if [[ ! -s $roi ]]
+then
+  	echo " "
+  	echo "the input image $roi does not exist, exiting ... pass -h option on command line"
+	echo " "
+  	exit 1
 else
     checkDim $roi
 fi
 
 
 
-if [[ ${#out} -lt 1 ]] ; then
-  echo no output defined  ... pass -h option on command line
-  echo -e  $usage
-  exit 1
+if [[ ${#out} -lt 1 ]] 
+then
+	echo " "
+	echo "no output defined  ... pass -h option on command line"
+  	echo -e  $usage
+	echo " "
+  	exit 1
 fi
 
  
 bd=$(dirname $out) 
 
 
-if [[ ! -s $bd ]] ; then
-  echo the output directory $bd does not exist, creating it
-  mkdir -p $bd 
+if [[ ! -s $bd ]]
+then
+	echo " "
+	echo "the output directory $bd does not exist, creating it"
+	echo " "
+  	mkdir -p $bd 
 fi
 # .................................................................... #
 
@@ -178,18 +211,31 @@ fi
 echo img is $img basedir is $bd outprefix is $out 
 
 # if an average image isn't specified, do motion correction and produce diagnostics
-if [[ ! -s $AVG ]] ; then
+if [[ ! -s $AVG ]]
+then
+  echo " "
+  echo "Performing motion correction on $img "
+  echo " "
+  
   antsMotionCorr  -d 3 -a $img -o ${out}avg.nii.gz  #fortex
   ExtractSliceFromImage 4 $img ${out}_slice_original.nii.gz 0 32
-  antsMotionCorr  -d 3 -o [${out},${out}.nii.gz,${out}avg.nii.gz] -m mi[ ${out}avg.nii.gz , $img , 1 , 32 , Regular, 0.01 ]  -t Rigid[ 0.25 ] -i 50 -u 1 -e 1 -s 1 -f 1 -n 10 -l 1 #fortex
-  ExtractSliceFromImage 4 ${out}.nii.gz ${out}_slice_corrected.nii.gz 0 32
+  antsMotionCorr  -d 3 -o [${out},${out}_MOCO.nii.gz,${out}avg.nii.gz] -m mi[ ${out}avg.nii.gz , $img , 1 , 32 , Regular, 0.01 ]  -t Rigid[ 0.25 ] -i 50 -u 1 -e 1 -s 1 -f 1 -n 10 -l 1 #fortex
+  ExtractSliceFromImage 4 ${out}_MOCO.nii.gz ${out}_slice_corrected.nii.gz 0 32
   ExtractSliceFromImage 3 ${out}_slice_corrected.nii.gz  ${out}_slice_corrected_x.nii.gz 1 22
   ExtractSliceFromImage 3 ${out}_slice_original.nii.gz  ${out}_slice_original_x.nii.gz 1 22
   ConvertToJpg ${out}_slice_original_x.nii.gz ${out}rsfmri_discon.jpg 
   ConvertToJpg ${out}_slice_corrected_x.nii.gz ${out}rsfmri_smooth.jpg 
-fi
-else cp $AVG ${out}avg.nii.gz
 
+
+  DIAG=${outdir}/diagnostic
+  mkdir $DIAG
+  mv *.jpg $DIAG
+  mv *corrected_x.nii.gz $DIAG
+  mv *original_x.nii.gz $DIAG
+  mv *slice_corrected.nii.gz $DIAG
+  mv *slice_original.nii.gz $DIAG
+else cp $AVG ${out}avg.nii.gz
+fi
 	
 ThresholdImage 3 $BMASK ${out}bmask.nii.gz 0.5 1.e9
   
@@ -204,23 +250,28 @@ ImageMath 3 ${out}bmask.nii.gz GetLargestComponent ${out}bmask.nii.gz #fortex
 ImageMath 4 ${out}compcorr.nii.gz CompCorrAuto ${out}.nii.gz ${out}bmask.nii.gz 2 #fortex
 
 # bias correction
-if [[ ! -s  ${out}n3.nii.gz ]] ; then   
+if [[ ! -s  ${out}n3.nii.gz ]] 
+then   
 	N3BiasFieldCorrection 3 ${out}avg.nii.gz ${out}n3.nii.gz 2 ${out}bmask.nii.gz ; 
 fi
 
 # 3 tissue segmentation of fmri image, guided by input tissue priors and brainmask
+echo " "
+echo "performing tissue segmentation of fMRI image..."
+echo " "
 Atropos -d 3 -a ${out}n3.nii.gz -a ${out}compcorr_variance.nii.gz -m [0.1,1x1x1] -o [${out}seg.nii.gz,${out}prob%02d.nii.gz] -x ${out}bmask.nii.gz -c [10,0] -i priorprobabilityimages[3,${out}prob%02d.nii.gz,0.5]
-
-# this line doesnt work
-# ImageMath 4 ${out}compcorr.nii.gz ThreeTissueConfounds ${out}.nii.gz  ${out}seg.nii.gz 1 3  #fortex 
+echo "segmentation ok"
 
 # if you have an ROI file, extract time series from each label
-echo roi $roi 
+echo " "
+echo "extracting time series from $roi"
+echo " "
+ 
 if [[ -s $roi ]] ; then
   ThresholdImage 3 ${out}prob02.nii.gz ${out}temp.nii.gz 0.1 1   # restrict analysis to cortical regions
   MultiplyImages 3 ${out}temp.nii.gz $roi ${out}roi.nii.gz 
   rm  ${out}temp.nii.gz
-  sccan --timeseriesimage-to-matrix [ ${out}.nii.gz , ${out}roi.nii.gz , 0 , 0 ] -o ${out}.csv 
+  sccan --timeseriesimage-to-matrix [ ${out}_MOCO.nii.gz , ${out}roi.nii.gz , 0 , 0 ] -o ${out}_timeseries_mat.csv 
   exit 
 fi
 
@@ -244,5 +295,8 @@ fi
   done
   cp ${out}temp.nii.gz ${out}nodes.nii.gz
   rm ${out}temp.nii.gz ${out}temp2.nii.gz
+  rm ${out}n3.nii.gz
+  rm ${out}bmask.nii.gz
+  rm ${out}roi.nii.gz
 exit
 # ------------------------------------------------------------------------- #
