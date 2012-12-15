@@ -20,7 +20,7 @@
 #export LD_LIBRARY_PATH=/usr/local/ANTS/ANTs-1.9.x-Linux/bin:$LD_LIBRARY_PATH
 
 # at PICSL use:
-export ANTSPATH=/home/avants/bin/ants/:${ANTSPATH}
+export ANTSPATH=/export/home/avants/bin/ants/:${ANTSPATH}
 
 
 # ----------------------- usage and input ---------------------------- #

@@ -23,8 +23,21 @@ library(getopt)
 # ----------------------------
 
 
-# ------------------------------- functions ----------------------------------#
 
+
+
+
+
+
+
+
+
+
+
+
+# -------------------------------------------------------------------------------------------- #
+# ----------------------------------------- functions -----------------------------------------#
+# -------------------------------------------------------------------------------------------- #
 
 # ............ createAvgMat .......... #
 # create matrix containing the average of all the correlation matrices for one group
@@ -34,15 +47,13 @@ library(getopt)
 createAvgMat <- function(list)
 {
 	n.sub <- dim(list)[1];
-	
+	print(paste("Average correlation matrices of ", n.sub, " subjects... "))
+
 	for(i in 1:n.sub)
 	{
 		# brainwaver adds header information to the correlation matrix
 		# if using wavelet data, skip this
-		if( ! is.null(opt$wavelet) )
-		 { cor.data <- read.table(list[i,], skip=3) }
-		else  {  cor.data <- read.table(list[i,]) }
-
+		cor.data <- read.table(list[i,]) 
 		cor.data <- as.matrix(cor.data)
 		
 		
@@ -65,6 +76,7 @@ createAvgMat <- function(list)
 		} else { avgMat <- avgMat + cor.data }
 	}
 	
+	print(paste("Average matrix created"))
 	return(avgMat / n.sub)
 }
 # ....................................... #
@@ -111,44 +123,57 @@ getSWParams <- function(avgMat, corthresh)
 	params$Lp.mean <- in.Lp.mean / rand.Lp.mean
 	params$Cp.mean <- in.Cp.mean / rand.Cp.mean
 	
+	
+	
 	return(params)
 }
 # ...................................... #
-
 
 # .......... plotparams ................ #
 # function to plot different parameters
 # INPUT:
 plotparams <- function(ctlval, patval, y.label, main.label)
 {
-	# determine y-range
-	ymax <- max(ctlval, patval)
-	ymax <- ymax + (ymax/10)  # add 10% extra y length to pad the graph
+	print(paste("entering plotparams"))
 
+	# determine y-range
+	ymax <- max(!is.na(ctlval), !is.na(patval))
+	ymax <- ymax + (ymax/10)  # add 10% extra y length to pad the graph
+	
+	
 	# plot patients versus controls
 	plot(cor.seq, (1:n.cor)/2, type='n', xlab='Correlation threshold, R', 
 	ylab=y.label, cex.axis=1, cex.lab=1, main=main.label, xlim=c(0,max(cor.seq)), ylim=c(0,ymax))
 	
-	lines(cor.seq, ctlval, type='l', col='blue', lwd=2)
-	lines(cor.seq, patval, type='l', col='red', lwd=2)
+
+	# length of one increment
+	inc <- cor.seq[2]-cor.seq[1]
+	
+	# setup plotting parameters
+	plot.seq <- seq(from=0, to=(length(ctlval)-1)*inc, by=inc)
+
+	lines(plot.seq, ctlval, type='l', col='blue', lwd=2)
+	lines(plot.seq, patval, type='l', col='red', lwd=2)
 
 	# do a t-test between the groups
 	t <- t.test(ctlval, patval, alternative = "greater", paired=FALSE, var.equal=FALSE, conf.level=0.95)
 	
 	# attach the p-value to the plot
 	mtext(sprintf(paste("p = %5.3f"), t$p.value));
+	
 }
 # ...................................... #
 
-
-# ------------------------------- end functions ---------------------------------- #
-
-
-
+# -------------------------------------------------------------------------------------------- #
+# --------------------------------------- end functions -------------------------------------- #
+# -------------------------------------------------------------------------------------------- #
 
 
 
-# --------------------------------- user input ----------------------------------- #
+
+# -------------------------------------------------------------------------------------------- #
+# --------------------------------------------- user input ----------------------------------- #
+# -------------------------------------------------------------------------------------------- #
 Args <- commandArgs()
 self <- Args[4]
 self <- substring(self, 8, nchar(as.character(self)))
@@ -200,14 +225,14 @@ if ( !is.null(opt$help) || length(opt) == 1)
 # ........... check for required input ............. #
 if( is.null(opt$controlfile) )
 {
-	print(paste("Specify file containing path to control matrices: -c"))
+	print(paste("Specify file containing path to control list: -c"))
 	print(paste("Exiting."))
 	q(status=1);
 }
 
 if( is.null(opt$patientfile) )
 {
-	print(paste("Specify file containing path to control matrices: -p"))
+	print(paste("Specify file containing path to subject list: -p"))
 	print(paste("Exiting."))
 	q(status=1);
 }
@@ -219,30 +244,31 @@ if( is.null(opt$timepoints) )
 	q(status=1);
 }
 
-if( is.null(opt$wavelet) & is.null(opt$correlation) )
-{
-	print(paste("Identify matrices as either wavelet decomposition or standard correlation (-w or -r)"))
-	print(paste("Exiting."))
-	q(status=1);
-} else
-if ( !(is.null(opt$wavelet)) & !(is.null(opt$correlation)) )
-{
-	print(paste("Identify matrices as either wavelet decomposition or standard correlation (-w or -r)"))
-	print(paste("Exiting."))
-	q(status=1);
-} 
 # ................................................... #
 
 
-
+# -------------------------------------------------------------------------------------------- #
 # ------------------------------------------- end user input --------------------------------- #
+# -------------------------------------------------------------------------------------------- #
 
 
 
 
 
 
+
+
+
+
+
+
+
+
+# ============================================================================================= #
+# ============================================================================================= #
 # =============================================== MAIN ======================================== #
+# ============================================================================================= #
+# ============================================================================================= #
 # setup constants
 
 # names
@@ -253,13 +279,13 @@ defaulttitle="Small World Paramteres"
 n.tps <- opt$timepoints
 
 # sequence of correlations values to use as a threshold, to test parameters over a range of values
-cor.seq <- seq(from=0, to=.5, by=.1)
+cor.seq <- seq(from=0, to=.4, by=.05)
 n.cor <- length(cor.seq)
 
 # empty vector to determine the size of the small-world dataframe
 basevec <- rep(0, n.cor)
 ctl.sm.params <- data.frame(in.degree.mean = basevec, Cp.mean = basevec, 
-							Lp.mean = basevec, size.large.connex = basevec, n.edges = basevec)
+		Lp.mean = basevec, size.large.connex = basevec, n.edges = basevec)
 pat.sm.params <- ctl.sm.params
 
 
@@ -273,6 +299,8 @@ ctrAvgMat <- createAvgMat(ctrlist)
 patAvgMat <- createAvgMat(patlist)
 
 # might want to write these to .txt file?
+write.table(ctrAvgMat, file="ctrAvgMat.txt")
+write.table(patAvgMat, file="patAvgMat.txt")
 
 # create a new index to have integer values for indexing
 index <- 0
@@ -284,7 +312,8 @@ for(cor.val in cor.seq)
 	
 	ctl.sm.params[index,] <- getSWParams(ctrAvgMat, cor.val)
 	
-	
+	print(paste("n.edges ", ctl.sm.params$n.edges[index]))
+
 	# we expect patients to have a smaller number of edges for any given threshold
 	# but we want to comparison to reflect the structure of the graphs, not just
 	# be influenced by number of edges
@@ -300,6 +329,8 @@ for(cor.val in cor.seq)
 	
 
 }
+
+
 
 
 
@@ -324,23 +355,54 @@ main.label.vec <- c("Mean Degree", "Mean Clustering Coefficient", "Mean Characte
 # plot all parameters
 for(i in 1:4)
 {
+	print(paste("i = ", i))
 	# for small worldness
 	if( i == 4)
 	{
+		# vector of values
 		ctlval <- ctl.sm.params[,2]/ctl.sm.params[,3]
 		patval <- pat.sm.params[,2]/pat.sm.params[,3]
+		
 	} else 
 	{  # for all others
+		# vector of values
 		ctlval <- ctl.sm.params[,i]
 		patval <- pat.sm.params[,i]
+				
+		
 	}
 	
+	# only retain valid values 
+	ctlval <- ctlval[!(ctlval=="NaN")]
+	ctlval <- ctlval[!(ctlval=="Inf")]
+	patval <- patval[!(patval=="NaN")]
+	patval <- patval[!(patval=="Inf")]
+
+	smallest <- min(length(ctlval), length(patval))
 	
+	# hmm do i actaully need these to be the same length?
+	repeat {
+		if( length(ctlval) > smallest )
+		{
+			ctlval <- ctlval[-(length(ctlval))]
+		} else break;
+	}
+
+	repeat {if( length(patval) > smallest )
+		{
+			patval <- patval[-(length(patval))]
+		} else break;
+	}
+		
+	# setup labels
 	y.label <- y.label.vec[i]
 	main.label <- main.label.vec[i]
 	
+	# plot each parameter
 	plotparams(ctlval, patval, y.label, main.label)
 }
+
+
 
 # figure caption
 mtext(figuretitle, side=3, line=1, cex=1, col="black", outer=TRUE)  

@@ -247,7 +247,7 @@ cp $WMPRIOR ${out}prob03.nii.gz
 
 
 ImageMath 3 ${out}bmask.nii.gz GetLargestComponent ${out}bmask.nii.gz #fortex
-ImageMath 4 ${out}compcorr.nii.gz CompCorrAuto ${out}.nii.gz ${out}bmask.nii.gz 2 #fortex
+ImageMath 4 ${out}compcorr.nii.gz CompCorrAuto ${img} ${out}bmask.nii.gz 2 #fortex
 
 # bias correction
 if [[ ! -s  ${out}n3.nii.gz ]] 

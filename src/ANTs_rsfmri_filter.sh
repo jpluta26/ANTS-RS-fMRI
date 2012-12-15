@@ -13,7 +13,7 @@
 # ----------------------------
 
 
-# TODO: user options to save bounds on correlation matrices- ask taki about this
+
 # corr heat maps dont update w/ label names <- make sure this populates
 
 
@@ -42,6 +42,9 @@ if(!pckg)
 
 
 
+
+
+# ---------------------------------------------------------------------- #
 # ------------------------- user input --------------------------------- #
 # ......................spec function....................... #
 # spec function, part of getopt library
@@ -49,7 +52,7 @@ if(!pckg)
 spec = c( 
 'verbose', 'v', 2, "integer" ," verbose output ",
 'help'   , 'h', 0, "logical" ," print the help ", 
-'rsfmri'   , 'f', 1, "character"," time-points by spatial-data csv file containing time series projections or raw data --- output of previous steps in pipeline",
+'rsfmri'   , 'f', 1, "character"," time-points by spatial-data csv file containing time series projections or raw data --- output of previous steps in pipeline (e.g., sub01_timeseries_mat.csv",
 'dummy' , 'd', 1, "integer" ," number of dummy scans to remove",
 'motion'   , 'm', 1, "character","csv file containing motion/metric nuisance variables for rsfmri data (optional)",
 'nuisance'   , 'n', 1, "character","csv file containing other nuisance variables for rsfmri data (optional)",
@@ -108,12 +111,16 @@ Level 6: 0.007-0.01hz \n\n')
 # ....................argument check.................................# 
 # check each required argument, if any are missing, quit the program
 
+# filter range or wavelet decomposition
 if ( !(is.null(opt$bandpass)) & !(is.null(opt$wavelet)) )
   {
 	print(paste(" Specify EITHER wavelet decomposition or a specific frequency range to filter."))
 	q(status=1)
   }
 
+
+
+# output
 if ( is.null(opt$output) ) 
   {
  	 print(paste(" Need -o option to define output. Exiting."))
@@ -121,18 +128,45 @@ if ( is.null(opt$output) )
   }
 
 
+
+# nuisance paramters
 if ( ! is.null(opt$nuisance) ) 
   {
   	print(paste("read nuis",opt$nuisance))
+
+	# get the file extension
+	ext <- sub(".*[.]", ".", opt$nuisance)
+	
+
+	# check to make sure the file is in the appropriate format
+	if( (ext != ".csv") & (ext != ".txt") )
+	{
+		print(paste("nuisance parameters should be in .csv or .txt format"))
+		print(paste("the entered file is in ", ext, " format"))
+		q(status=1)
+	}
   	nuisance<-read.csv(opt$nuisance)
   }
 
+
+
+# motion parameters
 if ( ! is.null(opt$motion) ) 
   {
 	  print(paste("read motion",opt$motion))
+	  ext <- sub(".*[.]", ".", opt$motion)
+	  if( (ext != ".csv") & (ext != ".txt") )
+	  {
+		print(paste("motion parameters should be in .csv or .txt format"))
+		print(paste("the entered file is in ", ext, " format"))
+		q(status=1)
+	  }
+
 	  motion<-read.csv(opt$motion)
   }
 
+
+# dummy scans
 if ( ! is.null(opt$dummy) )
 {
 	print(paste("dummy scans ", opt$dummy))
@@ -140,9 +174,21 @@ if ( ! is.null(opt$dummy) )
 }
 
 
+
+
+# fmri timeseries data
 if ( ! is.null(opt$rsfmri) ) 
   {
+	  ext <- sub(".*[.]", ".", opt$rsfmri)
+	  
 	  print(paste("read rsf data",opt$rsfmri))
+	  if( (ext != ".csv") & (ext != ".txt") )
+	  {
+		print(paste("fmri data should be in .csv or .txt format, e.g. the time-series x ROI matrix."))
+		print(paste("the entered file is in ", ext, " format"))
+		q(status=1)
+	  }
+
 	  a<-read.csv(opt$rsfmri)
    	 
 	  if ( ! is.null(opt$labelnames) ) 
@@ -152,23 +198,32 @@ if ( ! is.null(opt$rsfmri) )
     		colnames(a)<-newnames[,2] 
     	  }
   }
+else
+{
+	print(paste(" Need -f option to define input rsfmri data. Exiting."))
+ 	 q(status=1)
+}
 
+
+
+# tr
 if( is.null(opt$tr) )
 {
 	print(paste(" Need -t option to specify tr "))
 	q(status=1)
 }
-
-if ( is.null(opt$rsfmri) ) 
-  {
-  	print(paste(" Need -f option to define input rsfmri data. Exiting."))
- 	 q(status=1)
-  }
 # .......................................................................... #
+# ------------------------------end user input-------------------------------------------- #
 
 
 
-#.............get required packages..................#
+
+
+
+
+
+#.............get required packages.......................#
+# ........................................................#
 pckg = try(require(mFilter))
 
 if(!pckg) 
@@ -213,36 +268,54 @@ if(!pckg)
 	require("brainwaver")
 
 }
-#....................................................#
-# -------------------------------------------------------------------------- #
+#..........................................................#
+# ..................... end packages ..................... #
 
 
 
 
 
-# -------------------------- functions ------------------------------------ #
+
+
+
+# ----------------------------------------------------------------------------------- #
+# -------------------------- function definitions------------------------------------ #
+# ----------------------------------------------------------------------------------- #
+
+
+# ..................................moveFile .............................#
+# simulates the bash mv function, in this case specifically moving 
+# files to the diagnostic folder
+# INPUT: filename
+# OUTPUT: files are moved
+moveFile <- function(fn)
+{
+	# this might be too general...
+	filein <- paste("./", fn, sep="")
+	fileout <- paste("./diagnostic/", fn, sep="")
+	file.copy(filein, fileout)
+	file.remove(filein)
+}
+# ........................................................................# 
 
 
 # ................... filterTimeSeries .................................... #
-# filter time series by a specified range, write results to pdf
-# INPUT: time-series filtered for motion and nuisance; frequency range; level
-# level = 0 for standard correlation, 1-6 for wavelet decomposition
-# OUTPUT: filtered time series and diagnostic pdfs (1 per level)
-filterTimeSeries <- function(TimeSeries, freqLo, freqHi, level)
+# filter time series by a specified range, write results to pdf. used with bandpass filtering
+# INPUT: time-series filtered for motion and nuisance; frequency range
+# OUTPUT: filtered timeseries and diagnostic pdf
+filterTimeSeries <- function(TimeSeries, freqLo, freqHi)
 {
 	if( level == 0)
 	{
 		fn<-paste(opt$output,"_filtering.pdf",sep='')
-	} else
-	{
-		fn <- paste(opt$output, "_filtering_level_", level, ".pdf", sep='')
-	}
+	} 
 	
-	
+	# perform frequency filtering and write the data
 	print(paste("Frequency filter",freqLo,"x",freqHi,"from",tr,"second TR data"))	
 	voxLo<-round(1/freqLo)
 	voxHi<-round(1/freqHi)
-	write.table(TimeSeries, file="TimeSeries.txt", row.names=FALSE, col.names=FALSE)
+	#write.table(TimeSeries, file="TimeSeries.txt", row.names=FALSE, col.names=FALSE)
+	
 	# filter time series by specified range
 	# only proceed if the data is valid
 	fTimeSeries <- try(residuals( cffilter( TimeSeries , pl=voxHi, pu=voxLo , drift=TRUE , type="t")) )  
@@ -257,16 +330,21 @@ filterTimeSeries <- function(TimeSeries, freqLo, freqHi, level)
 		pdf(fn)
 		vv <- 2   # this is just picking an arbitrary ROI to display results for
 		par(mfrow=c(2,2))
+
+		# original data
 		plot(TimeSeries[,vv], type='l', main='Original Time Series', ylab="Signal")
 		spec.pgram( TimeSeries, taper=0, fast=FALSE, detrend=F, demean=F, log="n")
 		
+		# filtered data
 		plot(fTimeSeries[,vv],type='l',main=paste('Filtered Time series: ',freqLo,"< f <",freqHi), ylab="Signal")
 		spec.pgram(fTimeSeries, taper=0, fast=FALSE, detrend=F,demean=F, log="n")
 
-
+		
 
 		dev.off() # write pdf
 		
+		# move to diagnostic folder
+		moveFile(fn)
 		return(fTimeSeries)
 	}
 	
@@ -287,15 +365,37 @@ plotHeatMap <- function( corrmat , pdfname )
 		heatmap( corrmat, symm=T, Rowv=NA, labRow=names(a), labCol=names(a) )
 	}
 	dev.off()
+
+	moveFile(pdfname);
 }
-# .................................................................... #
-# ----------------------------------------------------------------------------- #
+# ......................................................................... #
+
+
+
+# ----------------------------------------------------------------------------------- #
+# --------------------------------- end functions------------------------------------ #
+# ----------------------------------------------------------------------------------- #
 
 
 
 
-# --------------------------------- MAIN ----------------------------------- #
+
+
+
+
+
+
+
+
+
+
+
+# ----------------------------------------------------------------------------------- #
+# -------------------------------------- MAIN --------------------------------------- #
+# ----------------------------------------------------------------------------------- #
+
 #...................create plot of mocoparams.............................#
+print(paste("Creating diagnostic MOCO plot..."))
 moconame <- paste(opt$output, "MOCO_plot.pdf", sep='')
 pdf(moconame, width=12, height=8)
 par(oma=c(0,0,5,0))  # outer margins, bottom left top right
@@ -358,7 +458,11 @@ mtext("Motion Correction Parameters", side=3, line=1, cex=2, col="black", outer=
 
 # write pdf
 dev.off()
+
+moveFile(moconame)
+print(paste("Plot created"))
 #........................................................................#
+
 
 
 # ............................signal processing .............................#
@@ -375,8 +479,10 @@ if ( dummy == 0 )
 
 inds<-c(dummy:nrow(amat)) # exclude dummy scans and reindex matrices
 
+
+
 # even number in time series -> trigonemetric regressions only available for even n
-if ( nrow( amat[ inds , ] ) %% 2 ==  1 ) 
+if ( dim(amat)[1] %% 2 ==  1 ) 
 	{ inds<-c((dummy+1):nrow(amat)) }
 
 
@@ -390,18 +496,18 @@ nuisance <- nuisance[inds,]
 # factor out nuisance variables
 # keep the portion of the signal that is not explained by nuisance vars,
 # which is the residuals
-if ( exists("nuisance") )
+if ( ! is.null(opt$nuisance) )
   {
-  	print("factor out nuisance vars")
+  	print(paste("factor out nuisance vars"))
   	mp<-as.matrix(nuisance)
   	amat<-residuals(lm(amat~1+mp))
   }
 
 
 # factor out motion vars
-if ( exists("motion") )
+if ( ! is.null(opt$motion) )
   {
-	  print("factor out motion vars")
+	  print(paste("factor out motion vars"))
 	  mp<-as.matrix(motion)
 	  mp[,1:6]<-mp[,1:6]-mp[c(1,3:nrow(mp),nrow(mp)),1:6]
 	  motionconfounds<-matrix( rep(NA,2*nrow(mp)) ,nrow=nrow(mp),ncol=2)
@@ -430,32 +536,12 @@ if( ! is.null(opt$bandpass) )
 	freqLo<-freqs[1]
 	freqHi<-freqs[2]
 	
-	fTimeSeries <- filterTimeSeries(myTimeSeries, freqLo, freqHi, 0)
+	fTimeSeries <- filterTimeSeries(myTimeSeries, freqLo, freqHi)
 	
 # if bandpass filtering isn't specified, proceed to wavelet decomposition
 } else 
 { 
-	# actual filtering takes place as part of the wavelet decomposition
-	# so we want to write the pdfs but not actually record the data
-	valid.levels=0
-	for(level in 1:6)
-	{
-		if( level == 1 )
-		{ freqLo <- 0.25; freqHi <- 0.45; } else
-		if( level == 2 ) { freqLo <- 0.11; freqHi <- 0.25; } else
-		if( level == 3 ) { freqLo <- 0.06; freqHi <- 0.11; } else
-		if( level == 4 ) { freqLo <- 0.03; freqHi <- 0.06; } else
-		if( level == 5 ) { freqLo <- 0.01; freqHi <- 0.03; } else
-		if( level == 6 ) { freqLo <- 0.007; freqHi <- 0.01; }
 		
-		# the pdfs are written as part of this function. temp is never used beyond the function call
-		# and as an error term.
-		temp <- filterTimeSeries(myTimeSeries, freqLo, freqHi, level)
-		if( temp == 0 ) 
-		{ print(paste("No valid data in range")) } else
-		{ valid.levels <- valid.levels + 1 }
-	}
-	
 	
 	fTimeSeries <- myTimeSeries 
 }
@@ -483,25 +569,77 @@ if( is.null(opt$bandpass) )
 
 	# fTimeSeries is the time series matrix
 	# create the wavelet correlation matrix and write to text
+	print(paste("do wavelet decomposition..."))
 	waveCorMat <- const.cor.list(tsdf, method = "modwt", wf = "la8", n.levels=6, boundary = "periodic", p.corr = 0.95)
-
-	# not totally sure why i would want this just yet
+	print(paste("wavelet decomposition done."))
+	
+	
 	waveVarMat <- const.var.list(tsdf,n.levels=6)
 	
-	# brainwaver saves correlation matrices with extra text at the top
-	# i think it will be easier to just save the matrices without this, so i don't have to condition
-	# for it later.
-	# 
-	# this saves all the tables and upper/lower bounds: save.cor.txt(waveCorMat)
 	
-	for(i in 1:valid.levels)
+	
+	for(level in 1:6)
 	{
-		name = paste(opt$output, "_cor_matrix_lvl", i, ".txt", sep="")
-		heatmapname = paste(opt$output, "_cor_matrix_map_level", i, ".pdf", sep="")
-		waveCorDat <- paste("waveCorMat$d", i, sep="")
+		fn <- paste(opt$output, "_filtering_level_", level, ".pdf", sep='')
+		
+		name = paste(opt$output, "_cor_matrix_lvl", level, ".txt", sep="")
+		
+		# wavelet decomposition levels
+		if(level == 1)
+		{ freqLo = 0.25
+		  freqHi = 0.45 } else
+		if(level == 2)
+		{ freqLo = 0.11
+		  freqHi = 0.25 } else
+		if(level == 3)
+		{ freqLo = 0.06
+		  freqHi = 0.11 } else
+		if(level == 4)
+		{ freqLo = 0.03
+		  freqHi = 0.06 } else
+		if(level == 5)
+		{ freqLo = 0.01
+		  freqHi = 0.03 } else
+		if(level == 6)
+		{ freqLo = 0.007 
+		  freqHi = 0.01 }
+	
+		# read in the correlation matrix for diagnostic results
+		waveCorDat <- paste("waveCorMat$d", level, sep="")
 		waveCorDat <- eval(parse(text=waveCorDat))
-		write.table( waveCorDat , name, row.names=FALSE, col.names=FALSE)
-		plotHeatMap( waveCorDat, heatmapname )
+	
+		# if there are NAs in the data, its not usable
+		# happens with the lower frequencies
+		if( length(which(is.na(waveCorDat))) > 0)
+		{
+			print(paste("No valid data for level ", level))
+		} else
+		{
+			write.table( waveCorDat , name, row.names=FALSE, col.names=FALSE)
+							
+			
+			print(paste("writing out reference filtering result",fn))
+			pdf(fn)
+			vv <- 2   # this is just picking an arbitrary ROI to display results for
+			par(mfrow=c(2,2))
+
+			# plot from original, unfiltered data
+			plot(tsdf[,vv], type='l', main='Original Time Series', ylab="Signal")
+		
+		
+			spec.pgram( waveCorDat, taper=0, fast=FALSE, detrend=F, demean=F, log="n")
+		
+			# plot filtered data
+			plot(waveCorDat[,vv],type='l',main=paste('Filtered Time series: ',freqLo,"< f <",freqHi), ylab="Signal")
+			spec.pgram(waveCorDat, taper=0, fast=FALSE, detrend=F,demean=F, log="n")
+			dev.off() # write pdf
+
+			moveFile(fn)
+		
+			# create correlation map
+			heatmapname = paste(opt$output, "_cor_matrix_map_level", level, ".pdf", sep="")
+			plotHeatMap( waveCorDat, heatmapname )
+		}
 	}
 } else
 {
@@ -513,6 +651,8 @@ if( is.null(opt$bandpass) )
 	write.table(im, file="cor_matrix.txt", row.names=FALSE, col.names=FALSE)
 	plotHeatMap( im , heatmapname)
 }
+
+
 #..................................................................................
 # --------------------------------------------------------------------------------------- #
 
