@@ -35,7 +35,7 @@ usage=" \n This script creates the necessary files for FC preprocessing from the
 	   -Transforms brainmask, tissue priors, and ROIs to functional image space  \n 
 
         required arguments:
-	-i : the fmri time series (4D image)
+-i : the fmri time series (4D image) # make this consistent, ie -f
 	-o : output prefix
 	-t : the T1 image	
 	-r : the ROIs for which connectivity is computed. all ROIs should be contained in a single file, and each should have a unique integer value (3D image)	
@@ -282,7 +282,7 @@ MOVING=${out}tempT2.nii.gz
 # perform coregistration 
 echo " "
 echo "Coregistration of anatomical and fmri images..."
-exe="antsRegistration -d 3 -r [ $FIXED , $MOVING, 1] -o [ ${out}toT1 , ${out}toT1.nii.gz ] -m Mattes[ $FIXED, $MOVING, 1, 32, Regular, 0.5] -t Translation[0.5] -f 6x4x2 -s 3x2x1 -c [100x100x100, 1e-08, 10]"
+exe="antsRegistration -d 3 -r [ $FIXED , $MOVING, 1] -o [ ${out}toT1 , ${out}toT1.nii.gz ] -m Mattes[ $FIXED, $MOVING, 1, 32, Regular, 0.5] -t Rigid[0.5] -f 6x4x2 -s 3x2x1 -c [100x100x100, 1e-08, 10]"
 echo $exe
 echo " "
 $exe

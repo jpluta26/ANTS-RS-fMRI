@@ -40,7 +40,11 @@ if(!pckg)
 	require("getopt")
 }
 
-
+pckg = try(require(ANTsR))
+{
+    cat("Requires ANTsR")
+    exit 1;
+}
 
 
 
@@ -56,7 +60,6 @@ spec = c(
 'dummy' , 'd', 1, "integer" ," number of dummy scans to remove",
 'motion'   , 'm', 1, "character","csv file containing motion/metric nuisance variables for rsfmri data (optional)",
 'nuisance'   , 'n', 1, "character","csv file containing other nuisance variables for rsfmri data (optional)",
-'wavelet' , 'w', 0, "logical", "do wavelet analysis",
 'bandpass'   , 'b', 1, "character"," frequences in form FLOxFHI e.g.  0.02x0.1 for bandpass filtering",
 'tr'   , 't', 1, "character"," TR for the rsfMRI acquisition",
 'labelnames' , 'l', 1, "character"," node label names passed in by the user, .txt format (optional)",
@@ -182,28 +185,29 @@ if ( ! is.null(opt$rsfmri) )
 	  ext <- sub(".*[.]", ".", opt$rsfmri)
 	  
 	  print(paste("read rsf data",opt$rsfmri))
-	  if( (ext != ".csv") & (ext != ".txt") )
+	  if (ext != ".nii.gz")  
 	  {
-		print(paste("fmri data should be in .csv or .txt format, e.g. the time-series x ROI matrix."))
+		print(paste("fmri data should be a 4D .nii.gz file"))
 		print(paste("the entered file is in ", ext, " format"))
 		q(status=1)
 	  }
 
-	  a<-read.csv(opt$rsfmri)
+	  ts<-antsImageRead(opt$rsfmri, "double", 4)
    	 
-	  if ( ! is.null(opt$labelnames) ) 
-   	  {
-    		print(paste("rename data according to user-passed label names",opt$labelnames))
-    		newnames<- read.table(opt$labelnames) 
-    		colnames(a)<-newnames[,2] 
-    	  }
+	  
   } else
 {
 	print(paste(" Need -f option to define input rsfmri data. Exiting."))
  	 q(status=1)
 }
 
-
+# brainmask
+if ( ! is.null(opt$bmask) )
+{
+# add dimension check
+# should these really be doubles?
+    bmask <- antsImageRead(opt$bmask, "double", 3)
+}
 
 # tr
 if( is.null(opt$tr) )
@@ -467,7 +471,11 @@ print(paste("Plot created"))
 # create a matrix of the time series for each ROI
 # i.e., image series with 120 time points, and 4 ROIs, will produce
 # a 120x4 matrix
-amat<-as.matrix(a)
+fmrimat <- timeseries2matrix( fmri, bmask )
+
+
+bmask <- as.matrix(bmask)
+roi <- as.matrix(roi)
 
 # so as not to mess up indexing
 if ( dummy == 0 )
@@ -475,16 +483,16 @@ if ( dummy == 0 )
 	dummy <- 1
 }
 
-inds<-c(dummy:nrow(amat)) # exclude dummy scans and reindex matrices
+inds<-c(dummy:nrow(ts)) # exclude dummy scans and reindex matrices
 
 
 
 # even number in time series -> trigonemetric regressions only available for even n
-if ( dim(amat)[1] %% 2 ==  1 ) 
-	{ inds<-c((dummy+1):nrow(amat)) }
+if ( dim(ts)[1] %% 2 ==  1 )
+	{ inds<-c((dummy+1):nrow(ts)) }
 
 
-amat <- amat[inds,]
+fmri <- fmri[inds,]
 motion <- motion[inds,]
 nuisance <- nuisance[inds,]
 
@@ -498,7 +506,7 @@ if ( ! is.null(opt$nuisance) )
   {
   	print(paste("factor out nuisance vars"))
   	mp<-as.matrix(nuisance)
-  	amat<-residuals(lm(amat~1+mp))
+  	fmri<-residuals(lm(fmri~1+mp))
   }
 
 
@@ -511,7 +519,7 @@ if ( ! is.null(opt$motion) )
 	  motionconfounds<-matrix( rep(NA,2*nrow(mp)) ,nrow=nrow(mp),ncol=2)
 	  motionconfounds[,1]<-sqrt( mp[,1]*mp[,1] + mp[,2]*mp[,2] + mp[,3]*mp[,3] )  # rotation magnitude
 	  motionconfounds[,2]<-sqrt( mp[,4]*mp[,4] + mp[,5]*mp[,5] + mp[,6]*mp[,6] )  # translation magnitude
-	  amat<-residuals(lm(amat~1+motionconfounds))
+	  fmri<-residuals(lm(fmri~1+motionconfounds))
   }
 
 
@@ -522,7 +530,7 @@ print("now do frequency filtering ")
 tr<-as.real(as.character(opt$tr)) 
 
 
-myTimeSeries<-ts( amat ,  frequency<-1/tr )
+myTimeSeries<-ts( fmri ,  frequency<-1/tr )
 
 
 # if the user specifies a paricular frequency range, filter for that range and save the new time series
@@ -537,17 +545,14 @@ if( ! is.null(opt$bandpass) )
 	fTimeSeries <- filterTimeSeries(myTimeSeries, freqLo, freqHi)
 	
 # if bandpass filtering isn't specified, proceed to wavelet decomposition
-} else 
-{ 
-		
-	
-	fTimeSeries <- myTimeSeries 
 }
 
 # write the filtered ts #
 tsdf<-as.matrix(fTimeSeries)
 
-names(tsdf)<-names(a)
+
+
+
 write.table(tsdf, file="filtered_timeseries.txt")
 # but, for wavelet decomposition, this wont be truly filtered...
 # this is the filtered time series of the ROI, remember
