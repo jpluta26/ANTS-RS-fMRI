@@ -339,7 +339,7 @@ do
 	
 	
 	# apply transformation
-	cmd="antsApplyTransforms -d 3 -i $IMG -r ${out}avg.nii.gz -o $OUT -t [${out}toT10DerivedInitialMovingTranslation.mat,1] -t [${out}toT11Translation.mat , 1] "
+	cmd="antsApplyTransforms -d 3 -i $IMG -r ${out}avg.nii.gz -o $OUT -t [${out}toT10DerivedInitialMovingTranslation.mat,1] -t [${out}toT11Rigid.mat , 1] "
 
 	# for ROI file
 	if [[ $count -eq 5 ]] ;
