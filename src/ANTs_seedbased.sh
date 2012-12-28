@@ -3,14 +3,7 @@
 # --------- about --------
 # avants and pluta 2012
 # some code is taken from the brainwaver manual, by sophie achard
-#
-# script to perform filtering of time-series data and create correlation matrix/matrices
-# uses either standard correlation within a specified filtering range, or wavelet decomposition with 6 levels
-# INPUT: fmri time-series, nuisance parameters, motion-correction parameters (.csv files)
-# number of dummy scans, tr, and optionally label names
-# OUTPUT: NxN correlation matrix where N is the number of ROIs
-# diagnostic pdfs of motion correction and filtering results
-# ----------------------------
+
 
 
 
@@ -97,13 +90,7 @@ if ( !is.null(opt$help) || length(opt) == 1 )
 	ex<-format(ex, width=length(ex), justify = c("left"))
 	cat("\n")
 	cat(ex)
-	cat('Filters the timeseries data and produces an NxN correlation matrix, where N is the number of unique timeseries (the number of ROIs). The matrix is computed using either standard correlation, filtered within a specified range (the -b flag), or using wavelet analysis (-w). In the latter case, matrices are computed for each level of the analysis, where level correspondes to a particular frequency range: \n
-Level 1: 0.25-0.45hz \
-Level 2: 0.11-0.25hz 
-Level 3: 0.06-0.11hz 
-Level 4: 0.03-0.06hz 
-Level 5: 0.01-0.03hz 
-Level 6: 0.007-0.01hz \n\n')
+	cat('Filters the timeseries data and produces an NxN correlation matrix, where N is the number of unique timeseries (the number of ROIs). The matrix is computed using either standard correlation, filtered within a specified range (t\n\n')
 	q(status=1);
 }
 # .................................................... #
@@ -192,7 +179,7 @@ if ( ! is.null(opt$rsfmri) )
 		q(status=1)
 	  }
 
-	  ts<-antsImageRead(opt$rsfmri, "double", 4)
+	  ts<-antsImageRead(opt$rsfmri, "float", 4)
    	 
 	  
   } else
@@ -206,7 +193,7 @@ if ( ! is.null(opt$bmask) )
 {
 # add dimension check
 # should these really be doubles?
-    bmask <- antsImageRead(opt$bmask, "double", 3)
+    bmask <- antsImageRead(opt$bmask, "unsigned int", 3)
 }
 
 # tr
@@ -354,26 +341,6 @@ filterTimeSeries <- function(TimeSeries, freqLo, freqHi)
 # .................................................................... #
 
 
-# ........................plotHeapMap....................................... #
-# just a wrapper functions to make the call easier
-plotHeatMap <- function( corrmat , pdfname )
-{
-	pdf( pdfname )
-	if( is.null(opt$labelnames) )
-	{
-		heatmap( corrmat, symm=T, Rowv=NA )
-	} else
-	{
-		heatmap( corrmat, symm=T, Rowv=NA, labRow=names(a), labCol=names(a) )
-	}
-	dev.off()
-
-	moveFile(pdfname);
-}
-# ......................................................................... #
-
-
-
 # ----------------------------------------------------------------------------------- #
 # --------------------------------- end functions------------------------------------ #
 # ----------------------------------------------------------------------------------- #
@@ -467,15 +434,22 @@ print(paste("Plot created"))
 
 
 
-# ............................signal processing .............................#
-# create a matrix of the time series for each ROI
-# i.e., image series with 120 time points, and 4 ROIs, will produce
-# a 120x4 matrix
-fmrimat <- timeseries2matrix( fmri, bmask )
+# ............................ main .............................#
+# read in the volumes to work with:
+# fmri: fmri time series (4D)
+# bmask: brainmask of the average fmri image
+# ROI: the seed region. create a correlation map by taking the average time-series in the seed region
+# and correlating to all other voxels in the mask.
+
+bmask <- antsImageRead( brainmask, "unsigned int", 3)
+ROI <- antsImageRead( seed, "unsigned int", 3)
+fmri <- antsImageRead( opt$fmri, "double", 4)
+
+# convert fmri data to a matrix, constrained by the area under the brainmask
+raw.fmri.mat <- timeseries2matrix( fmri, bmask )
 
 
-bmask <- as.matrix(bmask)
-roi <- as.matrix(roi)
+
 
 # so as not to mess up indexing
 if ( dummy == 0 )
@@ -483,18 +457,17 @@ if ( dummy == 0 )
 	dummy <- 1
 }
 
-inds<-c(dummy:nrow(ts)) # exclude dummy scans and reindex matrices
+inds<-c(dummy:nrow(raw.fmri.mat)) # exclude dummy scans and reindex matrices
 
 
 
 # even number in time series -> trigonemetric regressions only available for even n
-if ( dim(ts)[1] %% 2 ==  1 )
-	{ inds<-c((dummy+1):nrow(ts)) }
+if ( dim(raw.fmri.mat)[1] %% 2 ==  1 )
+	{ inds<-c((dummy+1):nrow(raw.fmri.mat)) }
 
+# reindex raw data excluding dummy scans
+raw.fmri.mat <- raw.fmri.mat[inds,]
 
-fmri <- fmri[inds,]
-motion <- motion[inds,]
-nuisance <- nuisance[inds,]
 
 
 
@@ -504,22 +477,24 @@ nuisance <- nuisance[inds,]
 # which is the residuals
 if ( ! is.null(opt$nuisance) )
   {
+    motion <- motion[inds,]
   	print(paste("factor out nuisance vars"))
   	mp<-as.matrix(nuisance)
-  	fmri<-residuals(lm(fmri~1+mp))
+  	fmri.mat<-residuals(lm(raw.fmri.mat~1+mp))
   }
 
 
 # factor out motion vars
 if ( ! is.null(opt$motion) )
   {
+      nuisance <- nuisance[inds,]
 	  print(paste("factor out motion vars"))
 	  mp<-as.matrix(motion)
 	  mp[,1:6]<-mp[,1:6]-mp[c(1,3:nrow(mp),nrow(mp)),1:6]
 	  motionconfounds<-matrix( rep(NA,2*nrow(mp)) ,nrow=nrow(mp),ncol=2)
 	  motionconfounds[,1]<-sqrt( mp[,1]*mp[,1] + mp[,2]*mp[,2] + mp[,3]*mp[,3] )  # rotation magnitude
 	  motionconfounds[,2]<-sqrt( mp[,4]*mp[,4] + mp[,5]*mp[,5] + mp[,6]*mp[,6] )  # translation magnitude
-	  fmri<-residuals(lm(fmri~1+motionconfounds))
+	  fmri.mat<-residuals(lm(fmri.mat~1+motionconfounds))
   }
 
 
@@ -530,25 +505,37 @@ print("now do frequency filtering ")
 tr<-as.real(as.character(opt$tr)) 
 
 
-myTimeSeries<-ts( fmri ,  frequency<-1/tr )
+myTimeSeries<-ts( fmri.mat ,  frequency<-1/tr )
 
 
-# if the user specifies a paricular frequency range, filter for that range and save the new time series
-# otherwise we will look at the different levels of the wavelet decomposition
-if( ! is.null(opt$bandpass) )
+freqs<-c(as.numeric(unlist(strsplit(opt$bandpass,"x"))))  # splits bandpass into 2 reals
+	
+freqLo<-freqs[1]
+freqHi<-freqs[2]
+	
+fTimeSeries <- filterTimeSeries(myTimeSeries, freqLo, freqHi)
+	
+
+main.ts <- as.matrix(fTimeSeries)
+
+bmask.range <- (bmask == 1)
+roi.range <- (ROI == 1)
+
+roi.ts <- fTimeSeries[roi.range]
+roi.ts <- rowMeans(roi.ts)
+
+ntwk <- rep( NA, ncol(main.ts) )
+
+for( i in 1:ncol(main.ts) )
 {
-	freqs<-c(as.numeric(unlist(strsplit(opt$bandpass,"x"))))  # splits bandpass into 2 reals
-	
-	freqLo<-freqs[1]
-	freqHi<-freqs[2]
-	
-	fTimeSeries <- filterTimeSeries(myTimeSeries, freqLo, freqHi)
-	
-# if bandpass filtering isn't specified, proceed to wavelet decomposition
+    corr <- cor.test(roi.ts, main.ts[,i])
+    ntwk[i] <- corr$est
 }
 
-# write the filtered ts #
-tsdf<-as.matrix(fTimeSeries)
+corr.img <- array(0, dim=c(xdim, ydim, zdim) )
+corr.img[bmask.range] <- as.real(ntwk)
+corr.img <- as.antsImage(corr.img)
+antsImageWrite(corr.img, name)
 
 
 
@@ -558,105 +545,6 @@ write.table(tsdf, file="filtered_timeseries.txt")
 # this is the filtered time series of the ROI, remember
 #..................................................................................#
 
-
-
-# ......................procede with analysis .............................#
-# once filtering is done, create correlation matrices
-if( is.null(opt$bandpass) )
-{
-	# use wavelet decomposition
-	
-	# number of time points
-	n.tmPts <- dim(tsdf)[1]  
-
-
-	# number of regions
-	n.regions <- dim(tsdf)[2]
-
-	# fTimeSeries is the time series matrix
-	# create the wavelet correlation matrix and write to text
-	print(paste("do wavelet decomposition..."))
-	waveCorMat <- const.cor.list(tsdf, method = "modwt", wf = "la8", n.levels=6, boundary = "periodic", p.corr = 0.95)
-	print(paste("wavelet decomposition done."))
-	
-	
-	waveVarMat <- const.var.list(tsdf,n.levels=6)
-	
-	
-	
-	for(level in 1:6)
-	{
-		fn <- paste(opt$output, "_filtering_level_", level, ".pdf", sep='')
-		
-		name = paste(opt$output, "_cor_matrix_lvl", level, ".txt", sep="")
-		
-		# wavelet decomposition levels
-		if(level == 1)
-		{ freqLo = 0.25
-		  freqHi = 0.45 } else
-		if(level == 2)
-		{ freqLo = 0.11
-		  freqHi = 0.25 } else
-		if(level == 3)
-		{ freqLo = 0.06
-		  freqHi = 0.11 } else
-		if(level == 4)
-		{ freqLo = 0.03
-		  freqHi = 0.06 } else
-		if(level == 5)
-		{ freqLo = 0.01
-		  freqHi = 0.03 } else
-		if(level == 6)
-		{ freqLo = 0.007 
-		  freqHi = 0.01 }
-	
-		# read in the correlation matrix for diagnostic results
-		waveCorDat <- paste("waveCorMat$d", level, sep="")
-		waveCorDat <- eval(parse(text=waveCorDat))
-	
-		# if there are NAs in the data, its not usable
-		# happens with the lower frequencies
-		if( length(which(is.na(waveCorDat))) > 0)
-		{
-			print(paste("No valid data for level ", level))
-		} else
-		{
-			write.table( waveCorDat , name, row.names=FALSE, col.names=FALSE)
-							
-			
-			print(paste("writing out reference filtering result",fn))
-			pdf(fn)
-			vv <- 2   # this is just picking an arbitrary ROI to display results for
-			par(mfrow=c(2,2))
-
-			# plot from original, unfiltered data
-			plot(tsdf[,vv], type='l', main='Original Time Series', ylab="Signal")
-		
-		
-			spec.pgram( waveCorDat, taper=0, fast=FALSE, detrend=F, demean=F, log="n")
-		
-			# plot filtered data
-			plot(waveCorDat[,vv],type='l',main=paste('Filtered Time series: ',freqLo,"< f <",freqHi), ylab="Signal")
-			spec.pgram(waveCorDat, taper=0, fast=FALSE, detrend=F,demean=F, log="n")
-			dev.off() # write pdf
-
-			moveFile(fn)
-		
-			# create correlation map
-			heatmapname = paste(opt$output, "_cor_matrix_map_level", level, ".pdf", sep="")
-			plotHeatMap( waveCorDat, heatmapname )
-		}
-	}
-} else
-{
-	# otherwise the data has alreayd been filtered so we can do a standard correlation
-	im <- ( cor(tsdf) )
-	
-	heatmapname = paste(opt$output, "cor_matrix_map.pdf", sep="")
-	name = paste(opt$output, "cor_matrix.txt", sep="")
-	write.table(im, file="cor_matrix.txt", row.names=FALSE, col.names=FALSE)
-	plotHeatMap( im , heatmapname)
-}
 
 
 #..................................................................................

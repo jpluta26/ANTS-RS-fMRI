@@ -12,9 +12,8 @@
 
 
 # TODO: 
-# -should support single subjects as well as group data
 # -have option to print a pdf or a series of pngs
-# - remove -w and -r flags, no longer necessary
+
 
 # ---- required libraries ----
 library(methods)
@@ -129,6 +128,9 @@ getSWParams <- function(avgMat, corthresh)
 }
 # ...................................... #
 
+
+
+
 # .......... plotparams ................ #
 # function to plot different parameters
 # INPUT:
@@ -137,9 +139,9 @@ plotparams <- function(ctlval, patval, y.label, main.label)
 	print(paste("entering plotparams"))
 
 	# determine y-range
-	ymax <- max(!is.na(ctlval), !is.na(patval))
+	ymax <- max(ctlval, patval)
 	ymax <- ymax + (ymax/10)  # add 10% extra y length to pad the graph
-	
+	cat("ymax = ", ymax)
 	
 	# plot patients versus controls
 	plot(cor.seq, (1:n.cor)/2, type='n', xlab='Correlation threshold, R', 
@@ -171,6 +173,12 @@ plotparams <- function(ctlval, patval, y.label, main.label)
 
 
 
+
+
+
+
+
+
 # -------------------------------------------------------------------------------------------- #
 # --------------------------------------------- user input ----------------------------------- #
 # -------------------------------------------------------------------------------------------- #
@@ -182,11 +190,11 @@ self <- substring(self, 8, nchar(as.character(self)))
 # define input options
 spec = c(
 	'help' , 'h', 0, "logical", "print help",
-	'controlfile', 'c', 1, "character", "file containing list of full path to invididual correlation matrices for control subjects",
-	'patientfile', 'p', 1, "character", "file containing list of full paths to individual correlation matrices for patients",
+	'controllist', 'c', 1, "character", "file containing list of full path to invididual correlation matrices for control subjects",
+	'patientlist', 'p', 1, "character", "file containing list of full paths to individual correlation matrices for patients",
+    'controlfile', 'C', 1, "character", "file containing control data; use this to compare single subjects, or if you have already computed an average",
+    'patientfile', 'P', 1, "character", "file containing patient data",
 	'timepoints', 't', 1, "integer", "number of time-points the matrices were computed from",
-	'wavelet', 'w', 0, "logical", "matrices were created by wavelet decomposition",
-	'correlation', 'r', 0, "logical", "matrices were created by correlation",
 	'figuretitle', 'f', 1, "character", "name to title the output figure (optional)",
 	'outputfile',  'o', 1, "character", "name of the output file (optional)"
 	)
@@ -212,7 +220,8 @@ if ( !is.null(opt$help) || length(opt) == 1)
 	}
 	
 	cat(format("Example: \n", width=40, justify = c("left")))
-	ex <- paste(self," -w -t 120 -c ctrlist.txt -p patlist.txt -o swparams.pdf \n \n")
+	ex <- paste(self," -t 120 -c ctrlist.txt -p patlist.txt -o swparams.pdf \n 
+           self," -t 120 -C ctravgmat.txt -P patavgmat.txt \n\n")
 	ex <- format(ex, width=length(ex), justify=c("left"))
 	cat("\n")
 	cat(ex)
@@ -223,18 +232,19 @@ if ( !is.null(opt$help) || length(opt) == 1)
 }
 
 # ........... check for required input ............. #
-if( is.null(opt$controlfile) )
+
+if( is.null(opt$controlfile) & is.null(opt$controllist) )
 {
-	print(paste("Specify file containing path to control list: -c"))
-	print(paste("Exiting."))
-	q(status=1);
+    print(paste("Need to specify control list or control file"))
+    print(paste("Exiting."))
+    q(status=1)
 }
 
-if( is.null(opt$patientfile) )
+if( is.null(opt$patientfile) & is.null(opt$patientlist))
 {
-	print(paste("Specify file containing path to subject list: -p"))
-	print(paste("Exiting."))
-	q(status=1);
+    print(paste("Need to specify patient list or patient file"))
+    print(paste("Exiting."))
+    q(status=1)
 }
 
 if( is.null(opt$timepoints) )
@@ -278,6 +288,7 @@ defaulttitle="Small World Paramteres"
 # number of time-points that the correlation data was computed from
 n.tps <- opt$timepoints
 
+
 # sequence of correlations values to use as a threshold, to test parameters over a range of values
 cor.seq <- seq(from=0, to=.4, by=.05)
 n.cor <- length(cor.seq)
@@ -289,19 +300,27 @@ ctl.sm.params <- data.frame(in.degree.mean = basevec, Cp.mean = basevec,
 pat.sm.params <- ctl.sm.params
 
 
+if( !is.null(opt$controlfile) & !is.null(opt$patientfile))
+{
+    # read in the data lists
+    ctrlist <- unname(as.matrix(read.table(opt$controllist)))
+    patlist <- unname(as.matrix(read.table(opt$patientlist)))
 
-# read in the data lists
-ctrlist <- unname(as.matrix(read.table(opt$controlfile)))
-patlist <- unname(as.matrix(read.table(opt$patientfile)))
+    # create average matrices
+    ctrAvgMat <- createAvgMat(ctrlist)
+    patAvgMat <- createAvgMat(patlist)
 
-# create average matrices
-ctrAvgMat <- createAvgMat(ctrlist)
-patAvgMat <- createAvgMat(patlist)
+    # might want to write these to .txt file?
+    write.table(ctrAvgMat, file="ctrAvgMat.txt")
+    write.table(patAvgMat, file="patAvgMat.txt")
+} else
+{
+    
+    ctrAvgMat <- as.matrix(read.table(eval(opt$controlfile)))
+    patAvgMat <- as.matrix(read.table(eval(opt$patientfile)))
+}
 
-# might want to write these to .txt file?
-write.table(ctrAvgMat, file="ctrAvgMat.txt")
-write.table(patAvgMat, file="patAvgMat.txt")
-
+cat("read in the data")
 # create a new index to have integer values for indexing
 index <- 0
 
@@ -348,6 +367,7 @@ par(mfrow=c(2,2))
 par(mar=c(5, 4, 4, 2)) # inner margins
 par(oma=c(1,1,3,1))    # outer margins
 
+# vectors of the label names
 y.label.vec <- c('k', parse(text="gamma"), parse(text="lambda"), parse(text="sigma") )
 main.label.vec <- c("Mean Degree", "Mean Clustering Coefficient", "Mean Characteristic Path Length", "Small Worldness")
 
@@ -380,7 +400,8 @@ for(i in 1:4)
 
 	smallest <- min(length(ctlval), length(patval))
 	
-	# hmm do i actaully need these to be the same length?
+	# need these to be the same length to plot against each other
+    # shorten whichever vector is longer
 	repeat {
 		if( length(ctlval) > smallest )
 		{
@@ -388,7 +409,8 @@ for(i in 1:4)
 		} else break;
 	}
 
-	repeat {if( length(patval) > smallest )
+	repeat {
+        if( length(patval) > smallest )
 		{
 			patval <- patval[-(length(patval))]
 		} else break;
@@ -412,5 +434,8 @@ mtext(figuretitle, side=3, line=1, cex=1, col="black", outer=TRUE)
 dev.off()
 # ---------------------------------- end plotting ---------------------------------------- #
 
-
-# ------------------------------------------ END MAIN -------------------------------------- #
+# ============================================================================================= #
+# ============================================================================================= #
+# =========================================== END MAIN ======================================== #
+# ============================================================================================= #
+# ============================================================================================= #

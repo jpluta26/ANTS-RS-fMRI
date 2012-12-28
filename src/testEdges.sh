@@ -97,9 +97,7 @@ spec = c(
 	'controlfile', 'c', 1, "character", "file containing list of full path to invididual correlation matrices for control subjects",
 	'patientfile', 'p', 1, "character", "file containing list of full paths to individual correlation matrices for patients",
 	'timepoints', 't', 1, "integer", "number of time-points the matrices were computed from",
-	'wavelet', 'w', 0, "logical", "matrices were created by wavelet decomposition",
-	'correlation', 'r', 0, "logical", "matrices were created by correlation",
-	'figuretitle', 'f', 1, "character", "name to title the output figure (optional)",
+    'figuretitle', 'f', 1, "character", "name to title the output figure (optional)",
 	'outputfile',  'o', 1, "character", "name of the output file (optional)"
 	)
 	
@@ -156,18 +154,6 @@ if( is.null(opt$timepoints) )
 	q(status=1);
 }
 
-if( is.null(opt$wavelet) & is.null(opt$correlation) )
-{
-	print(paste("Identify matrices as either wavelet decomposition or standard correlation (-w or -r)"))
-	print(paste("Exiting."))
-	q(status=1);
-} else
-if ( !(is.null(opt$wavelet)) & !(is.null(opt$correlation)) )
-{
-	print(paste("Identify matrices as either wavelet decomposition or standard correlation (-w or -r)"))
-	print(paste("Exiting."))
-	q(status=1);
-} 
 # ................................................... #
 
 
